@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Firebase Image Upload</title>
+
+<style>
+    *{
+        margin:0;
+        padding:0;
+        box-sizing:border-box;
+        font-family:Arial,sans-serif;
+    }
+
+    body{
+        background:#0f172a;
+        color:white;
+        padding:20px;
+    }
+
+    .container{
+        max-width:900px;
+        margin:auto;
+    }
+
+    h1{
+        text-align:center;
+        margin-bottom:20px;
+    }
+
+    .top{
+        display:flex;
+        gap:10px;
+        flex-wrap:wrap;
+        margin-bottom:20px;
+    }
+
+    input[type=file]{
+        flex:1;
+        background:#1e293b;
+        padding:12px;
+        border-radius:10px;
+        border:none;
+        color:white;
+    }
+
+    button{
+        padding:12px 18px;
+        border:none;
+        border-radius:10px;
+        cursor:pointer;
+        font-weight:bold;
+    }
+
+    .upload-btn{
+        background:#22c55e;
+        color:white;
+    }
+
+    .clear-btn{
+        background:#ef4444;
+        color:white;
+    }
+
+    .gallery{
+        display:grid;
+        grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+        gap:15px;
+    }
+
+    .card{
+        background:#1e293b;
+        padding:10px;
+        border-radius:15px;
+    }
+
+    .card img{
+        width:100%;
+        height:220px;
+        object-fit:cover;
+        border-radius:10px;
+    }
+
+    .loading{
+        text-align:center;
+        margin-top:20px;
+    }
+</style>
+</head>
+<body>
+
+<div class="container">
+
+    <h1>Firebase Image Upload</h1>
+
+    <div class="top">
+        <input type="file" id="fileInput" accept="image/*">
+        <button class="upload-btn" onclick="uploadImage()">Upload</button>
+        <button class="clear-btn" onclick="clearImages()">Clear All</button>
+    </div>
+
+    <div class="gallery" id="gallery"></div>
+
+    <div class="loading" id="loading"></div>
+
+</div>
+
+<script type="module">
+
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+
+import {
+    getDatabase,
+    ref as dbRef,
+    push,
+    onValue,
+    remove
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+
+import {
+    getStorage,
+    ref,
+    uploadBytes,
+    getDownloadURL,
+    listAll,
+    deleteObject
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
+
+const firebaseConfig = {
+    apiKey: "AIzaSyBbnU8DkthpYQMHOLLyj6M0cc05qXfjMcw",
+    authDomain: "ramadan-2385b.firebaseapp.com",
+    databaseURL: "https://ramadan-2385b-default-rtdb.firebaseio.com",
+    projectId: "ramadan-2385b",
+    storageBucket: "ramadan-2385b.firebasestorage.app",
+    messagingSenderId: "882828936310",
+    appId: "1:882828936310:web:7f97b921031fe130fe4b57"
+};
+
+const app = initializeApp(firebaseConfig);
+
+const db = getDatabase(app);
+const storage = getStorage(app);
+
+const gallery = document.getElementById("gallery");
+const loading = document.getElementById("loading");
+
+window.uploadImage = async function(){
+
+    const fileInput = document.getElementById("fileInput");
+
+    const file = fileInput.files[0];
+
+    if(!file){
+        alert("Select Image");
+        return;
+    }
+
+    loading.innerHTML = "Uploading...";
+
+    try{
+
+        const imageRef = ref(storage, "images/" + Date.now() + "_" + file.name);
+
+        await uploadBytes(imageRef, file);
+
+        const url = await getDownloadURL(imageRef);
+
+        await push(dbRef(db, "images"), {
+            imageUrl: url,
+            time: Date.now()
+        });
+
+        fileInput.value = "";
+
+        loading.innerHTML = "";
+
+        alert("Image Uploaded");
+
+    }catch(err){
+        console.log(err);
+        loading.innerHTML = "";
+        alert("Upload Failed");
+    }
+};
+
+onValue(dbRef(db, "images"), (snapshot)=>{
+
+    gallery.innerHTML = "";
+
+    const data = snapshot.val();
+
+    if(!data){
+        gallery.innerHTML = "<h3>No Images</h3>";
+        return;
+    }
+
+    Object.values(data).reverse().forEach(item=>{
+
+        gallery.innerHTML += `
+            <div class="card">
+                <img src="${item.imageUrl}">
+            </div>
+        `;
+
+    });
+
+});
+
+window.clearImages = async function(){
+
+    if(!confirm("Delete All Images?")) return;
+
+    loading.innerHTML = "Deleting...";
+
+    try{
+
+        const folderRef = ref(storage, "images");
+
+        const files = await listAll(folderRef);
+
+        const deletes = files.items.map(fileRef => deleteObject(fileRef));
+
+        await Promise.all(deletes);
+
+        await remove(dbRef(db, "images"));
+
+        loading.innerHTML = "";
+
+        alert("All Images Deleted");
+
+    }catch(err){
+        console.log(err);
+        loading.innerHTML = "";
+        alert("Delete Failed");
+    }
+
+};
+
+</script>
+
+</body>
+</html>
